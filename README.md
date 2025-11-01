@@ -87,3 +87,44 @@ $user->hasRole('project-editor', $post); // true
 $user->hasPermission('approve-post', $post); // true
 $user->hasPermission('approve-post'); // false, only scoped to the post
 ```
+
+If you need different role catalogs for different models (for example teams vs organizations) define `role_scopes` in the config:
+
+```php
+'role_scopes' => [
+    'team' => App\\Models\\Team::class,
+    'organization' => App\\Models\\Organization::class,
+],
+```
+
+Roles created with a matching `scope` value (or created through `Role::factory()->forScope('team')`) can then only be assigned when that context model is supplied, while standalone roles continue to work globally. You can query the catalog by scope using the provided helpers:
+
+```php
+Role::forScope('team')->get(); // only team roles
+Permission::forScope('organization')->get(); // permissions scoped to organizations
+```
+
+### Scoped permission creation
+
+Scoped permissions work the same way as scoped roles. You can generate them via the factories and attach them to matching roles:
+
+```php
+$permission = Permission::factory()
+    ->forScope('organization')
+    ->create([
+        'name' => 'View Organization Metrics',
+        'slug' => 'view-org-metrics',
+    ]);
+
+Role::factory()
+    ->forScope('organization')
+    ->create(['name' => 'Organization Analyst', 'slug' => 'org-analyst'])
+    ->permissions()
+    ->attach($permission);
+```
+
+To list abilities for a given tenant type you can chain the helpers:
+
+```php
+$orgPermissionSlugs = Permission::forScope('organization')->pluck('slug');
+```

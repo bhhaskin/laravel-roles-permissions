@@ -19,6 +19,11 @@ return [
         'users' => 'users',
     ],
 
+    'role_scopes' => [
+        // 'team' => App\Models\Team::class,
+        // 'organization' => App\Models\Organization::class,
+    ],
+
     'cache' => [
         'enabled' => false,
         'store' => null,

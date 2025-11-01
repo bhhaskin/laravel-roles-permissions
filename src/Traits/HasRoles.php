@@ -5,6 +5,7 @@ namespace Bhhaskin\RolesPermissions\Traits;
 use Illuminate\Database\Eloquent\Model as EloquentModel;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use LogicException;
 
 trait HasRoles
@@ -42,7 +43,7 @@ trait HasRoles
     public function assignRole(...$roles): self
     {
         $model = $this->extractModelArgument($roles, 'role');
-        $roles = $this->prepareRoles($roles);
+        $roles = $this->prepareRoles($roles, $model, true);
 
         if ($roles->isEmpty()) {
             return $this;
@@ -56,7 +57,7 @@ trait HasRoles
     public function removeRole(...$roles): self
     {
         $model = $this->extractModelArgument($roles, 'role');
-        $roles = $this->prepareRoles($roles);
+        $roles = $this->prepareRoles($roles, $model, true);
 
         if ($roles->isEmpty()) {
             return $this;
@@ -72,7 +73,7 @@ trait HasRoles
     public function syncRoles(...$roles): self
     {
         $model = $this->extractModelArgument($roles, 'role');
-        $roles = $this->prepareRoles($roles);
+        $roles = $this->prepareRoles($roles, $model, true);
         $roleIds = $roles->map(fn (EloquentModel $role) => $role->getKey())->all();
 
         if (! $this->objectPermissionsEnabled() || ! $model) {
@@ -145,7 +146,7 @@ trait HasRoles
     {
         $this->ensureObjectPermissionsEnabled($model);
 
-        $role = $this->resolveRole($role);
+        $role = $this->resolveRole($role, $model);
 
         if (! $role) {
             return false;
@@ -175,7 +176,7 @@ trait HasRoles
     public function hasAnyRole(...$roles): bool
     {
         $model = $this->extractModelArgument($roles, 'role');
-        $resolvedRoles = $this->prepareRoles($roles);
+        $resolvedRoles = $this->prepareRoles($roles, $model);
 
         if ($resolvedRoles->isEmpty()) {
             return false;
@@ -187,7 +188,7 @@ trait HasRoles
     public function hasAllRoles(...$roles): bool
     {
         $model = $this->extractModelArgument($roles, 'role');
-        $resolvedRoles = $this->prepareRoles($roles);
+        $resolvedRoles = $this->prepareRoles($roles, $model);
 
         if ($resolvedRoles->isEmpty()) {
             return false;
@@ -270,11 +271,11 @@ trait HasRoles
         return $relation->exists();
     }
 
-    protected function prepareRoles(array $roles): Collection
+    protected function prepareRoles(array $roles, ?EloquentModel $context = null, bool $enforceScope = false): Collection
     {
         return collect($roles)
             ->flatten()
-            ->map(fn ($role) => $this->resolveRole($role))
+            ->map(fn ($role) => $this->resolveRole($role, $context, $enforceScope))
             ->filter()
             ->values();
     }
@@ -288,12 +289,12 @@ trait HasRoles
             ->values();
     }
 
-    protected function resolveRole(string|int|EloquentModel $role): ?EloquentModel
+    protected function resolveRole(string|int|EloquentModel $role, ?EloquentModel $context = null, bool $enforceScope = false): ?EloquentModel
     {
         $roleClass = $this->getRoleClass();
 
         if ($role instanceof $roleClass) {
-            return $role;
+            return $this->filterRoleByContext($role, $context, $enforceScope);
         }
 
         if ($role instanceof EloquentModel) {
@@ -303,13 +304,19 @@ trait HasRoles
         $query = $roleClass::query();
 
         if (is_numeric($role)) {
-            return $query->whereKey($role)->first();
+            $result = $query->whereKey($role)->first();
+
+            return $this->filterRoleByContext($result, $context, $enforceScope);
         }
 
-        return $query
-            ->where('slug', $role)
-            ->orWhere('name', $role)
-            ->first();
+        $query->where(function ($q) use ($role) {
+            $q->where('slug', $role)
+                ->orWhere('name', $role);
+        });
+
+        $result = $this->resolveRoleForContext($query, $context);
+
+        return $this->filterRoleByContext($result, $context, $enforceScope);
     }
 
     protected function resolvePermission(string|int|EloquentModel $permission): ?EloquentModel
@@ -344,6 +351,57 @@ trait HasRoles
     protected function getPermissionClass(): string
     {
         return config('roles-permissions.models.permission', 'Bhhaskin\\RolesPermissions\\Models\\Permission');
+    }
+
+    protected function resolveRoleForContext($query, ?EloquentModel $context = null): ?EloquentModel
+    {
+        if (! $context) {
+            return (clone $query)->whereNull('scope')->first();
+        }
+
+        $scope = $this->determineRoleScope($context);
+
+        if ($scope === null) {
+            return (clone $query)->whereNull('scope')->first();
+        }
+
+        $scoped = (clone $query)->where('scope', $scope)->first();
+
+        return $scoped ?: (clone $query)->whereNull('scope')->first();
+    }
+
+    protected function filterRoleByContext(?EloquentModel $role, ?EloquentModel $context, bool $enforceScope): ?EloquentModel
+    {
+        if (! $role) {
+            return null;
+        }
+
+        if ($this->roleMatchesContext($role, $context)) {
+            return $role;
+        }
+
+        if ($enforceScope) {
+            throw new LogicException('Role scope does not match the provided context.');
+        }
+
+        return null;
+    }
+
+    protected function roleMatchesContext(EloquentModel $role, ?EloquentModel $context = null): bool
+    {
+        $roleScope = $role->scope ?? null;
+
+        if ($roleScope === null) {
+            return true;
+        }
+
+        if (! $context) {
+            return false;
+        }
+
+        $contextScope = $this->determineRoleScope($context);
+
+        return $contextScope !== null && $roleScope === $contextScope;
     }
 
     protected function extractModelArgument(array &$arguments, string $type): ?EloquentModel
@@ -394,6 +452,31 @@ trait HasRoles
             $config['type'] ?? 'model_type',
             $config['id'] ?? 'model_id',
         ];
+    }
+
+    protected function determineRoleScope(?EloquentModel $model): ?string
+    {
+        if (! $model) {
+            return null;
+        }
+
+        $scopes = (array) config('roles-permissions.role_scopes', []);
+
+        foreach ($scopes as $key => $value) {
+            if (is_int($key) && is_string($value) && class_exists($value) && is_a($model, $value)) {
+                return Str::snake(class_basename($value));
+            }
+
+            if (is_string($key) && is_string($value) && class_exists($value) && is_a($model, $value)) {
+                return $key;
+            }
+
+            if (is_string($key) && class_exists($key) && is_a($model, $key)) {
+                return is_string($value) ? $value : Str::snake(class_basename($key));
+            }
+        }
+
+        return Str::snake(class_basename($model));
     }
 
     protected function pivotAttributesForModel(EloquentModel $model): array

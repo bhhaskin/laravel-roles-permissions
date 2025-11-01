@@ -2,7 +2,9 @@
 
 use Bhhaskin\RolesPermissions\Models\Permission;
 use Bhhaskin\RolesPermissions\Models\Role;
+use Bhhaskin\RolesPermissions\Tests\Fixtures\Organization;
 use Bhhaskin\RolesPermissions\Tests\Fixtures\Post;
+use Bhhaskin\RolesPermissions\Tests\Fixtures\Team;
 use Bhhaskin\RolesPermissions\Tests\Fixtures\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -44,6 +46,55 @@ it('builds roles and permissions via factories', function () {
     expect($role->uuid)->toBeString()->not->toBeEmpty();
     expect($permission->uuid)->toBeString()->not->toBeEmpty();
     expect($role->permissions)->toHaveCount(1);
+});
+
+it('enforces role scopes for different models', function () {
+    config()->set('roles-permissions.object_permissions.enabled', true);
+    config()->set('roles-permissions.role_scopes', [
+        'team' => Team::class,
+        'organization' => Organization::class,
+    ]);
+
+    $user = User::create([
+        'name' => 'Scoped Role User',
+        'email' => sprintf('scoped-roles-%s@example.com', Str::uuid()),
+        'password' => bcrypt('password'),
+    ]);
+
+    $team = Team::create(['name' => 'Alpha Team']);
+    $organization = Organization::create(['name' => 'Gamma Org']);
+
+    $teamRole = Role::factory()->forScope('team')->create([
+        'name' => 'Team Manager',
+        'slug' => 'manager',
+    ]);
+
+    $orgRole = Role::factory()->forScope('organization')->create([
+        'name' => 'Org Manager',
+        'slug' => 'manager',
+    ]);
+
+    $globalRole = Role::factory()->create([
+        'name' => 'Global Admin',
+        'slug' => 'global-admin',
+    ]);
+
+    expect(Role::forScope('team')->count())->toBe(1);
+    expect(Role::forScope('organization')->count())->toBe(1);
+    expect(Role::forScope(null)->count())->toBeGreaterThanOrEqual(1);
+
+    $user->assignRole($teamRole, $team);
+    $user->assignRole($globalRole);
+
+    expect($user->hasRole('manager', $team))->toBeTrue();
+    expect($user->hasRole('manager', $organization))->toBeFalse();
+    expect($user->hasRole('global-admin', $team))->toBeTrue();
+
+    expect(fn () => $user->assignRole($teamRole))->toThrow(\LogicException::class);
+    expect(fn () => $user->assignRole($orgRole, $team))->toThrow(\LogicException::class);
+
+    $user->assignRole('manager', $organization);
+    expect($user->hasRole($orgRole, $organization))->toBeTrue();
 });
 
 it('handles direct and inherited permissions', function () {

@@ -21,6 +21,12 @@ class RoleFactory extends Factory
             'name' => $name,
             'slug' => Str::slug($name . '-' . Str::random(5)),
             'description' => $this->faker->optional()->sentence(),
+            'scope' => null,
         ];
+    }
+
+    public function forScope(?string $scope): self
+    {
+        return $this->state(fn () => ['scope' => $scope]);
     }
 }

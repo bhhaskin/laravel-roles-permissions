@@ -25,9 +25,11 @@ return new class extends Migration {
                 $table->id();
                 $table->uuid('uuid')->unique();
                 $table->string('name');
-                $table->string('slug')->unique();
+                $table->string('slug');
                 $table->string('description')->nullable();
+                $table->string('scope')->nullable()->index();
                 $table->timestamps();
+                $table->unique(['slug', 'scope']);
             });
         }
 
@@ -36,9 +38,11 @@ return new class extends Migration {
                 $table->id();
                 $table->uuid('uuid')->unique();
                 $table->string('name');
-                $table->string('slug')->unique();
+                $table->string('slug');
                 $table->string('description')->nullable();
+                $table->string('scope')->nullable()->index();
                 $table->timestamps();
+                $table->unique(['slug', 'scope']);
             });
         }
 
@@ -52,6 +56,8 @@ return new class extends Migration {
                 $table->timestamps();
                 $table->unique(['role_id', 'user_id', $morphType, $morphId], "{$table->getTable()}_unique_assignment");
                 $table->index([$morphType, $morphId], "{$table->getTable()}_model_index");
+                $table->index('user_id', "{$table->getTable()}_user_index");
+                $table->index('role_id', "{$table->getTable()}_role_index");
             });
         }
 
@@ -62,6 +68,8 @@ return new class extends Migration {
                 $table->foreignId('role_id')->constrained($rolesTable)->cascadeOnDelete();
                 $table->timestamps();
                 $table->unique(['permission_id', 'role_id'], "{$table->getTable()}_unique");
+                $table->index('permission_id', "{$table->getTable()}_permission_index");
+                $table->index('role_id', "{$table->getTable()}_role_index");
             });
         }
 
@@ -75,6 +83,8 @@ return new class extends Migration {
                 $table->timestamps();
                 $table->unique(['permission_id', 'user_id', $morphType, $morphId], "{$table->getTable()}_unique_assignment");
                 $table->index([$morphType, $morphId], "{$table->getTable()}_model_index");
+                $table->index('user_id', "{$table->getTable()}_user_index");
+                $table->index('permission_id', "{$table->getTable()}_permission_index");
             });
         }
     }

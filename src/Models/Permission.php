@@ -2,9 +2,10 @@
 
 namespace Bhhaskin\RolesPermissions\Models;
 
+use Bhhaskin\RolesPermissions\Database\Factories\PermissionFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Str;
 
 class Permission extends Model
@@ -16,6 +17,7 @@ class Permission extends Model
         'name' => 'string',
         'slug' => 'string',
         'description' => 'string',
+        'scope' => 'string',
         'uuid' => 'string',
     ];
 
@@ -56,7 +58,21 @@ class Permission extends Model
 
     protected static function newFactory()
     {
-        return \Bhhaskin\RolesPermissions\Database\Factories\PermissionFactory::new();
+        return PermissionFactory::new();
+    }
+
+    public function scopeForScope($query, ?string $scope)
+    {
+        if ($scope === null) {
+            return $query->whereNull('scope');
+        }
+
+        return $query->where('scope', $scope);
+    }
+
+    public static function forScope(?string $scope)
+    {
+        return static::query()->forScope($scope);
     }
 
     protected function roleModel(): string
