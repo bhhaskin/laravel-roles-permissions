@@ -59,6 +59,13 @@ Roles automatically inherit all attached permissions, so `hasPermission` will re
 
 Roles and permissions include a generated `uuid` column, and the default route key is switched to use it so API responses can safely expose the identifier without leaking incremental IDs.
 
+Laravel's class-based factory discovery is supported out of the box; pull in the package and you can call `Role::factory()` or `Permission::factory()` from your tests or seeders. A convenience database seeder (`Bhhaskin\RolesPermissions\Database\Seeders\RolesPermissionsSeeder`) is also provided—run it with `php artisan db:seed --class="Bhhaskin\RolesPermissions\Database\Seeders\RolesPermissionsSeeder"` to quickly populate sample data. If you prefer to customize them, publish the assets:
+
+```bash
+php artisan vendor:publish --provider="Bhhaskin\RolesPermissions\RolesPermissionsServiceProvider" --tag="laravel-roles-permissions-factories"
+php artisan vendor:publish --provider="Bhhaskin\RolesPermissions\RolesPermissionsServiceProvider" --tag="laravel-roles-permissions-seeders"
+```
+
 ## Configuration
 
 Publish the config to tweak model classes, table names, or caching preferences. The `cache` section is reserved for future enhancements; for now it stays disabled by default.

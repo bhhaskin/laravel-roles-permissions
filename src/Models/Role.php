@@ -4,10 +4,12 @@ namespace Bhhaskin\RolesPermissions\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Str;
 
 class Role extends Model
 {
+    use HasFactory;
     protected $guarded = [];
 
     protected $casts = [
@@ -50,6 +52,11 @@ class Role extends Model
     public function getRouteKeyName(): string
     {
         return 'uuid';
+    }
+
+    protected static function newFactory()
+    {
+        return \Bhhaskin\RolesPermissions\Database\Factories\RoleFactory::new();
     }
 
     protected function permissionModel(): string

@@ -35,6 +35,17 @@ it('assigns, checks, and removes roles', function () {
     expect($user->roles)->toHaveCount(1);
 });
 
+it('builds roles and permissions via factories', function () {
+    $role = Role::factory()->create();
+    $permission = Permission::factory()->create();
+
+    $role->permissions()->attach($permission);
+
+    expect($role->uuid)->toBeString()->not->toBeEmpty();
+    expect($permission->uuid)->toBeString()->not->toBeEmpty();
+    expect($role->permissions)->toHaveCount(1);
+});
+
 it('handles direct and inherited permissions', function () {
     $user = User::create([
         'name' => 'Permission User',

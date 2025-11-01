@@ -23,6 +23,16 @@ class RolesPermissionsServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/../database/migrations/' => database_path('migrations'),
             ], 'laravel-roles-permissions-migrations');
+
+            $this->publishes([
+                __DIR__ . '/../database/factories/' => database_path('factories'),
+            ], 'laravel-roles-permissions-factories');
+
+            $this->publishes([
+                __DIR__ . '/../database/seeders/RolesPermissionsSeeder.php' => database_path('seeders/RolesPermissionsSeeder.php'),
+            ], 'laravel-roles-permissions-seeders');
+
+            $this->loadFactoriesFrom(__DIR__ . '/../database/factories');
         }
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
